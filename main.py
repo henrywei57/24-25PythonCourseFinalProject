@@ -2,17 +2,35 @@ import pygame
 import random
 import pygame.gfxdraw
 import time
+import threading
 
-background_colour = (18, 31, 45) 
+true = True
+false = False
+
+
+background_color = (18, 31, 45) 
 screen = pygame.display.set_mode((0, 0)) 
-pygame.display.set_caption('Geeksforgeeks') 
-screen.fill(background_colour) 
+pygame.display.set_caption('Bur Bur Patapim') 
+screen.fill(background_color) 
 pygame.display.flip() 
-running = True
+running = true
 width,height = screen.get_size()
 pygame.font.init()
 rankFont = pygame.font.SysFont(None, 55)
-# rankFont.set_bold(True)
+cardCountFont = pygame.font.SysFont(None, 55)
+bustFont = pygame.font.SysFont(None, 250)
+bustFont.set_bold(true)
+buttonFont = pygame.font.SysFont(None, 40)
+bannerColor = (22, 44, 57)
+
+
+
+def cardToNum(card):
+    if card.getRank() == "A":
+        return 1
+    if card.getRank() == "J" or card.getRank() == "Q" or card.getRank() == "K":
+        return 10
+    return eval(str(card.getRank()))
 
 class card:
     def __init__(self,rank,suit):
@@ -25,16 +43,245 @@ class card:
     def getCard(self) -> str:
         return f"{self.rank} of {self.suit}"
 
-global dealer, dealerHide, player1, player2
 
 rank = ["A",2,3,4,5,6,7,8,9,10,"J","Q","K"]
 suit = ["diamond","heart","club","spade"]
 
+used_cards = set()
 
-def giveCard():
-    global dealer, dealerHide
-    dealer = card(rank[random.randint(0,12)],suit[random.randint(0,3)])
-    dealerHide = card(rank[random.randint(0,12)],suit[random.randint(0,3)])
+def get_unique_card():
+    while True:
+        r = rank[random.randint(0, 12)]
+        s = suit[random.randint(0, 3)]
+        if (r, s) not in used_cards:
+            used_cards.add((r, s))
+            return card(r, s)
+
+def reset_used_cards():
+    global used_cards
+    used_cards = set()
+
+
+
+class dealer:
+    def __init__(self):
+        self.cardList = []
+        self.cardList.append(get_unique_card())
+        self.cardList.append(get_unique_card())
+        self.hardHand = True
+        if any(c.rank == 'A' for c in self.cardList):
+            self.hardHand = False
+        self.total = sum(cardToNum(c) for c in self.cardList)
+        self.flip = False
+        self.bust = False
+
+
+
+    def displayCard(self):
+        text = cardCountFont.render("Dealer", True, (255, 255, 255))
+        text_rect = text.get_rect()
+        text_rect.centerx = width // 2
+        text_rect.top = 50
+        screen.blit(text, text_rect)
+
+        ellipse_width = text_rect.width + 20 
+        ellipse_height = text_rect.height + 10 
+        ellipse_x = text_rect.centerx - ellipse_width // 2
+        ellipse_y = text_rect.bottom + 15
+        pygame.draw.ellipse(screen, bannerColor, (ellipse_x, ellipse_y, ellipse_width, ellipse_height))
+
+        if self.flip:
+            counterString = str(self.total)
+            if not self.hardHand:
+                counterString += f"/{self.total + 10}"
+        else:
+            counterString = f"{cardToNum(self.cardList[1])}+?"
+
+        displayCounter = cardCountFont.render(counterString, True, (255, 255, 255))
+        counter_rect = displayCounter.get_rect()
+        counter_rect.centerx = width // 2
+        counter_rect.top = ellipse_y + 6
+        screen.blit(displayCounter, counter_rect)
+
+        displayCounter = cardCountFont.render(counterString, True, (255, 255, 255))
+        counter_rect = displayCounter.get_rect()
+        counter_rect.centerx = width // 2
+        counter_rect.top = ellipse_y + 6
+        screen.blit(displayCounter, counter_rect)
+
+
+        num_cards = len(self.cardList)
+        card_width = 100
+        spacing = 75 
+        total_width = (num_cards - 1) * spacing + card_width
+        start_x = (width // 2) - (total_width // 2)
+
+        if not self.flip:
+            for i in range(1, num_cards):
+                drawCard(
+                    str(self.cardList[i].getRank()), 
+                    self.cardList[i].getSuit(), 
+                    start_x + (i - 1) * spacing,
+                    170 + (i - 1) * 30 
+                )
+            drawHideCard(
+                start_x + (num_cards - 1) * spacing,
+                170 + (num_cards - 1) * 30  
+            )
+        else:
+            for i in range(1, num_cards):
+                drawCard(
+                    str(self.cardList[i].getRank()),
+                    self.cardList[i].getSuit(),
+                    start_x + (i - 1) * spacing,
+                    170 + (i - 1) * 30
+                )
+            drawCard(
+                str(self.cardList[0].getRank()),
+                self.cardList[0].getSuit(),
+                start_x + (num_cards - 1) * spacing,
+                170 + (num_cards - 1) * 30
+            )
+
+        if(self.bust):
+            text = bustFont.render("BUST", True, (255, 0, 0))
+            rotated_text = pygame.transform.rotate(text, -45)
+            rotated_rect = rotated_text.get_rect()
+            rotated_rect.centerx = width // 2
+            rotated_rect.top = 30
+            screen.blit(rotated_text, rotated_rect)
+
+
+    def addCard(self):
+        self.cardList.append(card(rank[random.randint(0, 12)], suit[random.randint(0, 3)]))
+        screen.fill(background_color)
+        self.total = sum(cardToNum(c) for c in self.cardList)
+        self.displayCard()
+        print("card added")
+    
+    def flipCard(self):
+        self.flip = true
+
+    def newHand(self):
+        self.cardList = []
+        self.cardList.append(get_unique_card())
+        self.cardList.append(get_unique_card())
+        self.hardHand = true
+        if any(c.rank == 'A' for c in self.cardList):
+            self.hardHand = false
+        self.total = sum(cardToNum(c) for c in self.cardList)
+        self.bust = false
+
+    def bustDealer(self):
+        self.bust = true
+
+
+class player:
+    def __init__(self):
+        self.cardList = []
+        self.cardList.append(get_unique_card())
+        self.cardList.append(get_unique_card())
+        self.hardHand = True
+        if any(c.rank == 'A' for c in self.cardList):
+            self.hardHand = False
+        self.total = sum(cardToNum(c) for c in self.cardList)
+        self.bust = False
+
+
+
+    def displayCard(self):
+        text = cardCountFont.render("Player", True, (255, 255, 255))
+        text_rect = text.get_rect()
+        text_rect.centerx = width // 2
+        text_rect.top = height // 2 + 100
+        screen.blit(text, text_rect)
+
+        ellipse_width = text_rect.width + 20 
+        ellipse_height = text_rect.height + 10 
+        ellipse_x = text_rect.centerx - ellipse_width // 2
+        ellipse_y = text_rect.bottom + 15
+        pygame.draw.ellipse(screen, bannerColor, (ellipse_x, ellipse_y, ellipse_width, ellipse_height))
+
+        counterString = str(self.total)
+
+        if not self.hardHand:
+            counterString += f"/{self.total + 10}"
+
+        displayCounter = cardCountFont.render(counterString, True, (255, 255, 255))
+        counter_rect = displayCounter.get_rect()
+        counter_rect.centerx = width // 2
+        counter_rect.top = ellipse_y + 6
+        screen.blit(displayCounter, counter_rect)
+
+        displayCounter = cardCountFont.render(counterString, True, (255, 255, 255))
+        counter_rect = displayCounter.get_rect()
+        counter_rect.centerx = width // 2
+        counter_rect.top = ellipse_y + 6
+        screen.blit(displayCounter, counter_rect)
+
+
+        num_cards = len(self.cardList)
+        card_width = 100
+        spacing = 75 
+        total_width = (num_cards - 1) * spacing + card_width
+        start_x = (width // 2) - (total_width // 2)
+
+        for i in range(1, num_cards):
+            drawCard(
+                str(self.cardList[i].getRank()),
+                self.cardList[i].getSuit(),
+                start_x + (i - 1) * spacing,
+                height // 2 + 220 + (i - 1) * 30
+            )
+        drawCard(
+            str(self.cardList[0].getRank()),
+            self.cardList[0].getSuit(),
+            start_x + (num_cards - 1) * spacing,
+            height // 2 + 220 + (num_cards - 1) * 30
+        )
+
+        if(self.bust):
+            text = bustFont.render("BUST", True, (255, 0, 0))
+            rotated_text = pygame.transform.rotate(text, -45)
+            rotated_rect = rotated_text.get_rect()
+            rotated_rect.centerx = width // 2
+            rotated_rect.top = height // 2 + 80
+            screen.blit(rotated_text, rotated_rect)
+
+
+    def addCard(self):
+        self.cardList.append(card(rank[random.randint(0, 12)], suit[random.randint(0, 3)]))
+        screen.fill(background_color)
+        if any(c.rank == 'A' for c in self.cardList):
+            self.hardHand = false
+        self.total = sum(cardToNum(c) for c in self.cardList)
+        self.displayCard()
+        print("card added")
+
+    def bustPlayer(self):
+        self.bust = true
+
+    def newHand(self):
+        self.cardList = []
+        self.cardList.append(get_unique_card())
+        self.cardList.append(get_unique_card())
+        self.hardHand = true
+        if any(c.rank == 'A' for c in self.cardList):
+            self.hardHand = false
+        self.total = sum(cardToNum(c) for c in self.cardList)
+        self.bust = false
+
+    
+
+# global dealer, dealerHide, player1, player2
+
+
+
+
+# def giveCard():
+    # global dealer, dealerHide
+    # dealer = card(rank[random.randint(0,12)],suit[random.randint(0,3)])
+    # dealerHide = card(rank[random.randint(0,12)],suit[random.randint(0,3)])
 
 
 
@@ -86,10 +333,8 @@ def drawSpade(x,y):
     pygame.gfxdraw.filled_polygon(screen, shape2, color)
     pygame.gfxdraw.filled_polygon(screen, shape3, color)
 
-
-
 def drawCard(rank, suit, x, y):
-    temp_surf = pygame.Surface((int(2.7 * 50), int(3.7 * 50)), pygame.SRCALPHA)
+    temp_surf = pygame.Surface((int(2.5 * 50), int(3.5 * 50)), pygame.SRCALPHA)
     pygame.draw.rect(
         temp_surf,
         (7, 13, 18, 179), 
@@ -118,7 +363,7 @@ def drawCard(rank, suit, x, y):
         color = (27, 42, 57)
         drawSpade(x,y)
     
-    text = rankFont.render(rank, True, color)
+    text = rankFont.render(rank, true, color)
     text_rect = text.get_rect()
     
     text_rect.centerx = x + 40  
@@ -149,23 +394,107 @@ def drawHideCard(x,y):
                      color=(70, 70, 170),
                      rect=(x+10, y+10, 2.5 * 50-20, 3.5 * 50-20),
                      border_radius=10)
-giveCard()
 
-dealerCardCount = 0
-playerCardCount = 0
+def drawBanner():
+    centerX, centerY = width//2, height//2
+    color = bannerColor
+    pygame.draw.rect(screen,
+                    color=color,
+                    rect=(centerX-200, centerY-60, 400, 80),
+                    border_radius=10)
+    shape1 = [(centerX-205, centerY-45), 
+              (centerX-275, centerY-45),
+              (centerX-265, centerY-5), 
+              (centerX-275, centerY+35), 
+              (centerX-165, centerY+35), 
+              (centerX-165, centerY+25), 
+              (centerX-205, centerY+25)]
+    pygame.draw.rect(screen,
+                    color=color,
+                    rect=(centerX-170, centerY+25, 10, 10),
+                    border_radius=2)
 
-while running: 
-    for event in pygame.event.get(): 
-        if event.type == pygame.QUIT: 
-            running = False
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_q:
+    shape2 = [(centerX+205, centerY-45), 
+              (centerX+275, centerY-45),
+              (centerX+265, centerY-5), 
+              (centerX+275, centerY+35), 
+              (centerX+165, centerY+35), 
+              (centerX+165, centerY+25), 
+              (centerX+205, centerY+25)]
+    pygame.draw.rect(screen,
+                    color=color,
+                    rect=(centerX+170, centerY+25, -10, 10),
+                    border_radius=2)
+    
+    pygame.gfxdraw.filled_polygon(screen, shape1, color)
+    pygame.gfxdraw.filled_polygon(screen, shape2, color)
+
+# def game():
+#     x = dealer()
+#     x.displayCard()
+#     while(1):
+#         for event in pygame.event.get(): 
+#             if event.type == pygame.KEYDOWN:
+#                 if event.key == pygame.K_g:
+#                     x.addCard()
+#                     print("key pressed")
+#             if event.type == pygame.KEYDOWN:
+#                 if event.key == pygame.K_q:
+#                     running = false
+
+
+
+
+def main():
+    global WIDTH, HEIGHT
+    
+    dealerGame = dealer()
+    playerGame = player()
+    clock = pygame.time.Clock()
+    running = True
+    
+    while running:
+        if pygame.event.get(pygame.VIDEORESIZE):
+            WIDTH, HEIGHT = pygame.display.get_surface().get_size()
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
                 running = False
-    
-    
-    drawCard(str(dealer.getRank()), dealer.getSuit(), width//2-125, 230)
-    drawHideCard(width//2-50, 260)
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_g:
+                    dealerGame.addCard()
+                elif event.key == pygame.K_q:
+                    running = False
+                elif event.key == pygame.K_t:
+                    playerGame.addCard()
+                elif event.key == pygame.K_b:
+                    playerGame.bustPlayer()
+                    dealerGame.bustDealer()
+                elif event.key == pygame.K_n:
+                    playerGame.newHand()
+                    dealerGame.newHand()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if button_rect.collidepoint(event.pos):
+                    dealerGame.bustDealer()
+                    playerGame.bustPlayer()
 
-    
+        screen.fill(background_color)
+        
+        button_rect = pygame.Rect(250, 150, 100, 50)
+        pygame.draw.rect(screen, (0, 128, 255), button_rect, border_radius=15)
+        text = buttonFont.render("bust", True, (255, 255, 255))
+        screen.blit(text, text.get_rect(center=button_rect.center))    
 
-    pygame.display.flip()
+        
+
+
+        dealerGame.displayCard()
+        playerGame.displayCard()
+        drawBanner()
+        pygame.display.flip()
+        clock.tick(60) 
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
