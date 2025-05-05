@@ -24,7 +24,7 @@ buttonFont = pygame.font.SysFont(None, 40)
 bannerColor = (22, 44, 57)
 bannerFont = pygame.font.SysFont(None, 40)
 
-
+balance = 0
 
 def cardToNum(card):
     if card.getRank() == "A":
@@ -276,6 +276,7 @@ class player:
             self.hardHand = false
         self.total = sum(cardToNum(c) for c in self.cardList)
         self.bust = false
+        self.playerTurn = true
 
     def endTurn(self):
         self.playerTurn = false
@@ -492,6 +493,11 @@ def standButtonDraw():
     text = buttonFont.render("Stand", True, (255, 255, 255))
     screen.blit(text, text.get_rect(center=standButton.center))    
 
+def newGame():
+    playerGame.newHand()
+    dealerGame.newHand()
+
+
 def main():
     global WIDTH, HEIGHT
     
@@ -536,7 +542,8 @@ def main():
             standButtonDraw()
 
 
-
+        if(playerGame.isPlayerBust() or not playerGame.isItPlayerTurn()):
+            newGame()
         
 
 
