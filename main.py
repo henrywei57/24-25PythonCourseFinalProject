@@ -22,6 +22,7 @@ bustFont = pygame.font.SysFont(None, 250)
 bustFont.set_bold(true)
 buttonFont = pygame.font.SysFont(None, 40)
 bannerColor = (22, 44, 57)
+bannerFont = pygame.font.SysFont(None, 40)
 
 
 
@@ -441,6 +442,11 @@ def drawBanner():
     pygame.gfxdraw.filled_polygon(screen, shape1, color)
     pygame.gfxdraw.filled_polygon(screen, shape2, color)
 
+    banner = buttonFont.render("BLACKJACK PAYS 3 TO 2", True, (127, 138, 157))
+    screen.blit(banner, banner.get_rect(center=(centerX, centerY-60+40))) 
+
+
+
 # def game():
 #     x = dealer()
 #     x.displayCard()
@@ -455,13 +461,41 @@ def drawBanner():
 #                     running = false
 
 
+dealerGame = dealer()
+playerGame = player()
 
+def hitButtonDraw():
+    global hitButton
+    hitButton = pygame.Rect(225, height-175, 100, 50)
+    mousepos = pygame.mouse.get_pos()
+    if (hitButton.collidepoint(mousepos) and 
+        playerGame.isItPlayerTurn() and 
+        not playerGame.isPlayerBust()):
+        color = (0, 100, 255-28) 
+    else:
+        color = (0, 128, 255)
+    pygame.draw.rect(screen, color, hitButton, border_radius=15)
+    text = buttonFont.render("Hit", True, (255, 255, 255))
+    screen.blit(text, text.get_rect(center=hitButton.center)) 
+
+def standButtonDraw():
+    global standButton
+    standButton = pygame.Rect(225+150, height-175, 100, 50)
+    mousepos = pygame.mouse.get_pos()
+    if (standButton.collidepoint(mousepos) and 
+        playerGame.isItPlayerTurn() and 
+        not playerGame.isPlayerBust()):
+        color = (0, 100, 255-28) 
+    else:
+        color = (0, 128, 255)
+    pygame.draw.rect(screen, color, standButton, border_radius=15)
+    text = buttonFont.render("Stand", True, (255, 255, 255))
+    screen.blit(text, text.get_rect(center=standButton.center))    
 
 def main():
     global WIDTH, HEIGHT
     
-    dealerGame = dealer()
-    playerGame = player()
+
     clock = pygame.time.Clock()
     running = True
     
@@ -491,17 +525,16 @@ def main():
                 elif standButton. collidepoint(event.pos):
                     playerGame.endTurn()
 
+
+
+
         screen.fill(background_color)
         
-        hitButton = pygame.Rect(225, height-175, 100, 50)
-        pygame.draw.rect(screen, (0, 128, 255), hitButton, border_radius=15)
-        text = buttonFont.render("Hit", True, (255, 255, 255))
-        screen.blit(text, text.get_rect(center=hitButton.center)) 
 
-        standButton = pygame.Rect(225+150, height-175, 100, 50)
-        pygame.draw.rect(screen, (0, 128, 255), standButton, border_radius=15)
-        text = buttonFont.render("Stand", True, (255, 255, 255))
-        screen.blit(text, text.get_rect(center=standButton.center))    
+        if playerGame.isItPlayerTurn() and not playerGame.isPlayerBust():
+            hitButtonDraw()
+            standButtonDraw()
+
 
 
         
