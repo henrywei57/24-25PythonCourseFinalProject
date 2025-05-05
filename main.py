@@ -186,6 +186,7 @@ class player:
             self.hardHand = False
         self.total = sum(cardToNum(c) for c in self.cardList)
         self.bust = False
+        self.playerTurn = True
 
 
 
@@ -257,6 +258,10 @@ class player:
         self.total = sum(cardToNum(c) for c in self.cardList)
         self.displayCard()
         print("card added")
+        if(self.total > 21):
+            self.bustPlayer()
+        if(self.total + 10 > 21):
+            self.hardHand = true
 
     def bustPlayer(self):
         self.bust = true
@@ -271,6 +276,13 @@ class player:
         self.total = sum(cardToNum(c) for c in self.cardList)
         self.bust = false
 
+    def endTurn(self):
+        self.playerTurn = false
+    def isItPlayerTurn(self):
+        return self.playerTurn
+    
+    def isPlayerBust(self):
+        return self.bust
     
 
 # global dealer, dealerHide, player1, player2
@@ -474,16 +486,23 @@ def main():
                     playerGame.newHand()
                     dealerGame.newHand()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if button_rect.collidepoint(event.pos):
-                    dealerGame.bustDealer()
-                    playerGame.bustPlayer()
+                if hitButton.collidepoint(event.pos) and playerGame.isItPlayerTurn() and not playerGame.isPlayerBust():
+                    playerGame.addCard()
+                elif standButton. collidepoint(event.pos):
+                    playerGame.endTurn()
 
         screen.fill(background_color)
         
-        button_rect = pygame.Rect(250, 150, 100, 50)
-        pygame.draw.rect(screen, (0, 128, 255), button_rect, border_radius=15)
-        text = buttonFont.render("bust", True, (255, 255, 255))
-        screen.blit(text, text.get_rect(center=button_rect.center))    
+        hitButton = pygame.Rect(225, height-175, 100, 50)
+        pygame.draw.rect(screen, (0, 128, 255), hitButton, border_radius=15)
+        text = buttonFont.render("Hit", True, (255, 255, 255))
+        screen.blit(text, text.get_rect(center=hitButton.center)) 
+
+        standButton = pygame.Rect(225+150, height-175, 100, 50)
+        pygame.draw.rect(screen, (0, 128, 255), standButton, border_radius=15)
+        text = buttonFont.render("Stand", True, (255, 255, 255))
+        screen.blit(text, text.get_rect(center=standButton.center))    
+
 
         
 
