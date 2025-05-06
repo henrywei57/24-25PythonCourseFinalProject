@@ -75,14 +75,14 @@ class dealer:
         self.total = sum(cardToNum(c) for c in self.cardList)
         self.flip = False
         self.bust = False
-
+        self.finishTurn = False
 
 
     def displayCard(self):
         text = cardCountFont.render("Dealer", True, (255, 255, 255))
         text_rect = text.get_rect()
         text_rect.centerx = width // 2
-        text_rect.top = 50
+        text_rect.top = 20
         screen.blit(text, text_rect)
 
         ellipse_width = text_rect.width + 20 
@@ -123,11 +123,11 @@ class dealer:
                     str(self.cardList[i].getRank()), 
                     self.cardList[i].getSuit(), 
                     start_x + (i - 1) * spacing,
-                    170 + (i - 1) * 30 
+                    170 - 30 + (i - 1) * 30 
                 )
             drawHideCard(
                 start_x + (num_cards - 1) * spacing,
-                170 + (num_cards - 1) * 30  
+                170 - 30 + (num_cards - 1) * 30  
             )
         else:
             for i in range(1, num_cards):
@@ -135,13 +135,13 @@ class dealer:
                     str(self.cardList[i].getRank()),
                     self.cardList[i].getSuit(),
                     start_x + (i - 1) * spacing,
-                    170 + (i - 1) * 30
+                    170 - 30 + (i - 1) * 30
                 )
             drawCard(
                 str(self.cardList[0].getRank()),
                 self.cardList[0].getSuit(),
                 start_x + (num_cards - 1) * spacing,
-                170 + (num_cards - 1) * 30
+                170 - 30 + (num_cards - 1) * 30
             )
 
         if(self.bust):
@@ -175,6 +175,15 @@ class dealer:
 
     def bustDealer(self):
         self.bust = true
+    
+    def getTotal(self):
+        return self.total
+
+    def isItHard(self):
+        return self.hardHand
+
+    def endTurn(self):
+        self.finishTurn = true
 
 
 class player:
@@ -195,7 +204,7 @@ class player:
         text = cardCountFont.render("Player", True, (255, 255, 255))
         text_rect = text.get_rect()
         text_rect.centerx = width // 2
-        text_rect.top = height // 2 + 100
+        text_rect.top = height - 370
         screen.blit(text, text_rect)
 
         ellipse_width = text_rect.width + 20 
@@ -233,13 +242,13 @@ class player:
                 str(self.cardList[i].getRank()),
                 self.cardList[i].getSuit(),
                 start_x + (i - 1) * spacing,
-                height // 2 + 220 + (i - 1) * 30
+                height - 225 - 20 + (i - 1) * 30
             )
         drawCard(
             str(self.cardList[0].getRank()),
             self.cardList[0].getSuit(),
             start_x + (num_cards - 1) * spacing,
-            height // 2 + 220 + (num_cards - 1) * 30
+            height - 225 - 20 + (num_cards - 1) * 30
         )
 
         if(self.bust):
@@ -247,7 +256,7 @@ class player:
             rotated_text = pygame.transform.rotate(text, -45)
             rotated_rect = rotated_text.get_rect()
             rotated_rect.centerx = width // 2
-            rotated_rect.top = height // 2 + 80
+            rotated_rect.top = height // 2 + 20
             screen.blit(rotated_text, rotated_rect)
 
 
@@ -410,7 +419,7 @@ def drawHideCard(x,y):
                      border_radius=10)
 
 def drawBanner():
-    centerX, centerY = width//2, height//2
+    centerX, centerY = width//2, height//2+20
     color = bannerColor
     pygame.draw.rect(screen,
                     color=color,
@@ -467,7 +476,7 @@ playerGame = player()
 
 def hitButtonDraw():
     global hitButton
-    hitButton = pygame.Rect(225, height-175, 100, 50)
+    hitButton = pygame.Rect(225 - 150, height-175 - 150, 100, 50)
     mousepos = pygame.mouse.get_pos()
     if (hitButton.collidepoint(mousepos) and 
         playerGame.isItPlayerTurn() and 
@@ -481,7 +490,7 @@ def hitButtonDraw():
 
 def standButtonDraw():
     global standButton
-    standButton = pygame.Rect(225+150, height-175, 100, 50)
+    standButton = pygame.Rect(225+150 - 150, height-175 - 150, 100, 50)
     mousepos = pygame.mouse.get_pos()
     if (standButton.collidepoint(mousepos) and 
         playerGame.isItPlayerTurn() and 
@@ -535,21 +544,30 @@ def main():
 
 
         screen.fill(background_color)
-        
+        drawBanner()
 
         if playerGame.isItPlayerTurn() and not playerGame.isPlayerBust():
             hitButtonDraw()
             standButtonDraw()
+        
+        if not playerGame.isItPlayerTurn():
+            dealerGame.flipCard()
+            if dealerGame.getTotal() <= 16:
+                dealerGame.addCard()
+            if dealerGame.getTotal() > 21 and dealerGame.isItHard():
+                dealerGame.bustDealer()
+            if dealerGame.getTotal() < 16 and dealerGame.isItHard():
+                dealerGame.endTurn()
+            elif dealerGame.getTotal() < 16 and not dealerGame.isItHard():
 
 
-        if(playerGame.isPlayerBust() or not playerGame.isItPlayerTurn()):
-            newGame()
+        # if(playerGame.isPlayerBust() or not playerGame.isItPlayerTurn()):
+            # newGame()
         
 
 
         dealerGame.displayCard()
         playerGame.displayCard()
-        drawBanner()
         pygame.display.flip()
         clock.tick(60) 
 
