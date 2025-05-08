@@ -558,7 +558,6 @@ def main():
                 dealerGame.bustDealer()
             if dealerGame.getTotal() < 16 and dealerGame.isItHard():
                 dealerGame.endTurn()
-            elif dealerGame.getTotal() < 16 and not dealerGame.isItHard():
 
 
         # if(playerGame.isPlayerBust() or not playerGame.isItPlayerTurn()):
