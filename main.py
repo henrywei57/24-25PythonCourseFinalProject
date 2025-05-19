@@ -7,7 +7,6 @@ import threading
 true = True
 false = False
 
-
 background_color = (18, 31, 45) 
 screen = pygame.display.set_mode((0, 0)) 
 pygame.display.set_caption('Bur Bur Patapim') 
@@ -21,10 +20,24 @@ cardCountFont = pygame.font.SysFont(None, 55)
 bustFont = pygame.font.SysFont(None, 250)
 bustFont.set_bold(true)
 buttonFont = pygame.font.SysFont(None, 40)
+balanceFont = pygame.font.SysFont(None, 50)
+betFont = pygame.font.SysFont(None, 40)
+inputFont = pygame.font.SysFont(None, 60)
 bannerColor = (22, 44, 57)
 bannerFont = pygame.font.SysFont(None, 40)
 
-balance = 0
+# Initialize balance and betting variables
+balance = 1000  # Starting balance
+current_bet = 0
+game_in_progress = False
+bet_placed = False
+input_active = False
+bet_input = ""
+error_message = ""
+error_timer = 0
+dealer_revealing = False
+dealer_reveal_index = 0
+dealer_reveal_timer = 0
 
 def cardToNum(card):
     if card.getRank() == "A":
@@ -44,7 +57,6 @@ class card:
     def getCard(self) -> str:
         return f"{self.rank} of {self.suit}"
 
-
 rank = ["A",2,3,4,5,6,7,8,9,10,"J","Q","K"]
 suit = ["diamond","heart","club","spade"]
 
@@ -62,8 +74,6 @@ def reset_used_cards():
     global used_cards
     used_cards = set()
 
-
-
 class dealer:
     def __init__(self):
         self.cardList = []
@@ -76,7 +86,7 @@ class dealer:
         self.flip = False
         self.bust = False
         self.finishTurn = False
-
+        self.blackjack = False
 
     def displayCard(self):
         text = cardCountFont.render("Dealer", True, (255, 255, 255))
@@ -104,13 +114,6 @@ class dealer:
         counter_rect.top = ellipse_y + 6
         screen.blit(displayCounter, counter_rect)
 
-        displayCounter = cardCountFont.render(counterString, True, (255, 255, 255))
-        counter_rect = displayCounter.get_rect()
-        counter_rect.centerx = width // 2
-        counter_rect.top = ellipse_y + 6
-        screen.blit(displayCounter, counter_rect)
-
-
         num_cards = len(self.cardList)
         card_width = 100
         spacing = 75 
@@ -130,21 +133,36 @@ class dealer:
                 170 - 30 + (num_cards - 1) * 30  
             )
         else:
-            for i in range(1, num_cards):
+            # Only show revealed cards
+            for i in range(1, min(num_cards, dealer_reveal_index + 1)):
                 drawCard(
                     str(self.cardList[i].getRank()),
                     self.cardList[i].getSuit(),
                     start_x + (i - 1) * spacing,
                     170 - 30 + (i - 1) * 30
                 )
-            drawCard(
-                str(self.cardList[0].getRank()),
-                self.cardList[0].getSuit(),
-                start_x + (num_cards - 1) * spacing,
-                170 - 30 + (num_cards - 1) * 30
-            )
+            # Show hidden card until it's revealed
+            if dealer_reveal_index < num_cards:
+                drawHideCard(
+                    start_x + (num_cards - 1) * spacing,
+                    170 - 30 + (num_cards - 1) * 30
+                )
+            else:
+                drawCard(
+                    str(self.cardList[0].getRank()),
+                    self.cardList[0].getSuit(),
+                    start_x + (num_cards - 1) * spacing,
+                    170 - 30 + (num_cards - 1) * 30
+                )
 
-        if(self.bust):
+        if self.blackjack:
+            text = bustFont.render("BLACKJACK", True, (0, 200, 0))
+            rotated_text = pygame.transform.rotate(text, -45)
+            rotated_rect = rotated_text.get_rect()
+            rotated_rect.centerx = width // 2
+            rotated_rect.top = 30
+            screen.blit(rotated_text, rotated_rect)
+        elif self.bust:
             text = bustFont.render("BUST", True, (255, 0, 0))
             rotated_text = pygame.transform.rotate(text, -45)
             rotated_rect = rotated_text.get_rect()
@@ -152,16 +170,19 @@ class dealer:
             rotated_rect.top = 30
             screen.blit(rotated_text, rotated_rect)
 
-
     def addCard(self):
-        self.cardList.append(card(rank[random.randint(0, 12)], suit[random.randint(0, 3)]))
+        self.cardList.append(get_unique_card())
         screen.fill(background_color)
         self.total = sum(cardToNum(c) for c in self.cardList)
         self.displayCard()
         print("card added")
     
     def flipCard(self):
+        global dealer_revealing, dealer_reveal_index, dealer_reveal_timer
         self.flip = true
+        dealer_revealing = True
+        dealer_reveal_index = 0
+        dealer_reveal_timer = pygame.time.get_ticks()
 
     def newHand(self):
         self.cardList = []
@@ -172,6 +193,12 @@ class dealer:
             self.hardHand = false
         self.total = sum(cardToNum(c) for c in self.cardList)
         self.bust = false
+        self.flip = false
+        self.finishTurn = false
+        self.blackjack = False
+        # Check for dealer blackjack
+        if (self.total == 11 and not self.hardHand) or self.total == 21:
+            self.blackjack = True
 
     def bustDealer(self):
         self.bust = true
@@ -185,7 +212,6 @@ class dealer:
     def endTurn(self):
         self.finishTurn = true
 
-
 class player:
     def __init__(self):
         self.cardList = []
@@ -197,8 +223,10 @@ class player:
         self.total = sum(cardToNum(c) for c in self.cardList)
         self.bust = False
         self.playerTurn = True
-
-
+        self.blackjack = False
+        # Check for player blackjack
+        if (self.total == 11 and not self.hardHand) or self.total == 21:
+            self.blackjack = True
 
     def displayCard(self):
         text = cardCountFont.render("Player", True, (255, 255, 255))
@@ -224,13 +252,6 @@ class player:
         counter_rect.top = ellipse_y + 6
         screen.blit(displayCounter, counter_rect)
 
-        displayCounter = cardCountFont.render(counterString, True, (255, 255, 255))
-        counter_rect = displayCounter.get_rect()
-        counter_rect.centerx = width // 2
-        counter_rect.top = ellipse_y + 6
-        screen.blit(displayCounter, counter_rect)
-
-
         num_cards = len(self.cardList)
         card_width = 100
         spacing = 75 
@@ -251,7 +272,14 @@ class player:
             height - 225 - 20 + (num_cards - 1) * 30
         )
 
-        if(self.bust):
+        if self.blackjack:
+            text = bustFont.render("BLACKJACK", True, (0, 200, 0))
+            rotated_text = pygame.transform.rotate(text, -45)
+            rotated_rect = rotated_text.get_rect()
+            rotated_rect.centerx = width // 2
+            rotated_rect.top = height // 2 + 20
+            screen.blit(rotated_text, rotated_rect)
+        elif self.bust:
             text = bustFont.render("BUST", True, (255, 0, 0))
             rotated_text = pygame.transform.rotate(text, -45)
             rotated_rect = rotated_text.get_rect()
@@ -259,9 +287,8 @@ class player:
             rotated_rect.top = height // 2 + 20
             screen.blit(rotated_text, rotated_rect)
 
-
     def addCard(self):
-        self.cardList.append(card(rank[random.randint(0, 12)], suit[random.randint(0, 3)]))
+        self.cardList.append(get_unique_card())
         screen.fill(background_color)
         if any(c.rank == 'A' for c in self.cardList):
             self.hardHand = false
@@ -272,6 +299,8 @@ class player:
             self.bustPlayer()
         if(self.total + 10 > 21):
             self.hardHand = true
+        # Player can't have blackjack after hitting
+        self.blackjack = False
 
     def bustPlayer(self):
         self.bust = true
@@ -285,7 +314,11 @@ class player:
             self.hardHand = false
         self.total = sum(cardToNum(c) for c in self.cardList)
         self.bust = false
-        self.playerTurn = true
+        self.playerTurn = True
+        self.blackjack = False
+        # Check for player blackjack
+        if (self.total == 11 and not self.hardHand) or self.total == 21:
+            self.blackjack = True
 
     def endTurn(self):
         self.playerTurn = false
@@ -294,19 +327,6 @@ class player:
     
     def isPlayerBust(self):
         return self.bust
-    
-
-# global dealer, dealerHide, player1, player2
-
-
-
-
-# def giveCard():
-    # global dealer, dealerHide
-    # dealer = card(rank[random.randint(0,12)],suit[random.randint(0,3)])
-    # dealerHide = card(rank[random.randint(0,12)],suit[random.randint(0,3)])
-
-
 
 def drawDiamond(x,y):
     color = (203, 56, 74)
@@ -369,8 +389,6 @@ def drawCard(rank, suit, x, y):
                      color=(225, 225, 225),
                      rect=(x, y, 2.5 * 50, 3.5 * 50),
                      border_radius=10)
-
-
     
     color = (0, 0, 0)
     if suit == "diamond":
@@ -403,7 +421,6 @@ def drawHideCard(x,y):
         border_radius=10
     )
     screen.blit(temp_surf, (x-5, y-5))
-
 
     pygame.draw.rect(screen,
                      color=(70, 70, 170),
@@ -455,62 +472,226 @@ def drawBanner():
     banner = buttonFont.render("BLACKJACK PAYS 3 TO 2", True, (127, 138, 157))
     screen.blit(banner, banner.get_rect(center=(centerX, centerY-60+40))) 
 
+def drawBalance():
+    # Draw balance background
+    pygame.draw.rect(screen, (30, 50, 70), (width//4 - 300, 20, 200, 60), border_radius=10)
+    pygame.draw.rect(screen, (20, 40, 60), (width//4 - 295, 25, 190, 50), border_radius=8)
+    
+    # Draw balance text
+    balance_text = balanceFont.render(f"${balance}", True, (255, 255, 255))
+    screen.blit(balance_text, (width//4 - 280, 35))
+    
+    # Draw current bet
+    if current_bet > 0:
+        pygame.draw.rect(screen, (70, 30, 50), (width//4 + 100, 20, 200, 60), border_radius=10)
+        pygame.draw.rect(screen, (60, 20, 40), (width//4 + 105, 25, 190, 50), border_radius=8)
+        bet_text = balanceFont.render(f"Bet: ${current_bet}", True, (255, 255, 255))
+        screen.blit(bet_text, (width//4 + 120, 35))
 
-
-# def game():
-#     x = dealer()
-#     x.displayCard()
-#     while(1):
-#         for event in pygame.event.get(): 
-#             if event.type == pygame.KEYDOWN:
-#                 if event.key == pygame.K_g:
-#                     x.addCard()
-#                     print("key pressed")
-#             if event.type == pygame.KEYDOWN:
-#                 if event.key == pygame.K_q:
-#                     running = false
-
-
-dealerGame = dealer()
-playerGame = player()
+def drawBetInput():
+    global bet_input_box, bet_button
+    
+    # Draw bet input area at the top center
+    pygame.draw.rect(screen, (40, 40, 60), (width//5 - 200, height//4+height//2, 400, 80), border_radius=10)
+    
+    # Draw input box
+    input_color = (60, 60, 80) if not input_active else (80, 80, 100)
+    bet_input_box = pygame.Rect(width//5 - 180, height//4+height//2+20, 240, 50)
+    pygame.draw.rect(screen, input_color, bet_input_box, border_radius=8)
+    
+    # Draw input text
+    input_text = inputFont.render(bet_input if bet_input else "0", True, (255, 255, 255))
+    screen.blit(input_text, (bet_input_box.x + 10, bet_input_box.y + 5))
+    
+    # Draw bet button
+    bet_button = pygame.Rect(width//5 + 70, height//4+height//2+20, 110, 50)
+    button_color = (0, 150, 0) if bet_button.collidepoint(pygame.mouse.get_pos()) else (0, 180, 0)
+    pygame.draw.rect(screen, button_color, bet_button, border_radius=8)
+    bet_text = buttonFont.render("BET", True, (255, 255, 255))
+    screen.blit(bet_text, (bet_button.centerx - bet_text.get_width()//2, 
+                          bet_button.centery - bet_text.get_height()//2))
+    
+    # Draw error message if any
+    if error_message and pygame.time.get_ticks() - error_timer < 3000:  # Show for 3 seconds
+        error_text = buttonFont.render(error_message, True, (255, 50, 50))
+        screen.blit(error_text, (width//5 - error_text.get_width()//4, height//4+height//2-20))
 
 def hitButtonDraw():
     global hitButton
-    hitButton = pygame.Rect(225 - 150, height-175 - 150, 100, 50)
-    mousepos = pygame.mouse.get_pos()
-    if (hitButton.collidepoint(mousepos) and 
-        playerGame.isItPlayerTurn() and 
-        not playerGame.isPlayerBust()):
-        color = (0, 100, 255-28) 
-    else:
-        color = (0, 128, 255)
-    pygame.draw.rect(screen, color, hitButton, border_radius=15)
-    text = buttonFont.render("Hit", True, (255, 255, 255))
-    screen.blit(text, text.get_rect(center=hitButton.center)) 
+    hitButton = pygame.Rect(width//2 - 150, height - 175, 100, 50)
+    if (bet_placed and game_in_progress and playerGame.isItPlayerTurn() and 
+        not playerGame.isPlayerBust() and not playerGame.blackjack):
+        mousepos = pygame.mouse.get_pos()
+        if hitButton.collidepoint(mousepos):
+            color = (0, 100, 255-28) 
+        else:
+            color = (0, 128, 255)
+        pygame.draw.rect(screen, color, hitButton, border_radius=15)
+        text = buttonFont.render("Hit", True, (255, 255, 255))
+        screen.blit(text, text.get_rect(center=hitButton.center)) 
 
 def standButtonDraw():
     global standButton
-    standButton = pygame.Rect(225+150 - 150, height-175 - 150, 100, 50)
-    mousepos = pygame.mouse.get_pos()
-    if (standButton.collidepoint(mousepos) and 
-        playerGame.isItPlayerTurn() and 
-        not playerGame.isPlayerBust()):
-        color = (0, 100, 255-28) 
-    else:
-        color = (0, 128, 255)
-    pygame.draw.rect(screen, color, standButton, border_radius=15)
-    text = buttonFont.render("Stand", True, (255, 255, 255))
-    screen.blit(text, text.get_rect(center=standButton.center))    
+    standButton = pygame.Rect(width//2 + 50, height - 175, 100, 50)
+    if (bet_placed and game_in_progress and playerGame.isItPlayerTurn() and 
+        not playerGame.isPlayerBust() and not playerGame.blackjack):
+        mousepos = pygame.mouse.get_pos()
+        if standButton.collidepoint(mousepos):
+            color = (0, 100, 255-28) 
+        else:
+            color = (0, 128, 255)
+        pygame.draw.rect(screen, color, standButton, border_radius=15)
+        text = buttonFont.render("Stand", True, (255, 255, 255))
+        screen.blit(text, text.get_rect(center=standButton.center))    
 
 def newGame():
+    global game_in_progress, bet_placed, dealer_revealing, dealer_reveal_index
+    reset_used_cards()
     playerGame.newHand()
     dealerGame.newHand()
+    game_in_progress = True
+    bet_placed = True
+    dealer_revealing = False
+    dealer_reveal_index = 0
+    
+    # Check for immediate blackjack
+    checkBlackjack()
 
+def checkBlackjack():
+    global balance, game_in_progress
+    
+    # Player has blackjack
+    if playerGame.blackjack:
+        # Dealer also has blackjack - push
+        if dealerGame.blackjack:
+            balance += current_bet  # Return original bet
+            showMessage("Push! Both have Blackjack")
+        else:
+            # Player wins 3:2
+            winnings = current_bet * 2.5
+            balance += int(winnings)
+            showMessage(f"Blackjack! You win ${int(winnings - current_bet)}")
+        endRound()
+    # Dealer has blackjack (player doesn't)
+    elif dealerGame.blackjack:
+        showMessage("Dealer has Blackjack! You lose")
+        endRound()
+
+def endRound():
+    global game_in_progress, bet_placed, current_bet, dealer_revealing, balance
+    
+    # Flip dealer's card
+    dealerGame.flipCard()
+    dealer_revealing = True
+    
+    # If player didn't bust and doesn't have blackjack, compare totals
+    if not playerGame.bust and not playerGame.blackjack:
+        # Dealer must hit until 17
+        while dealerGame.getTotal() < 17 or (not dealerGame.isItHard() and dealerGame.getTotal() == 17):
+            dealerGame.addCard()
+            if dealerGame.getTotal() > 21 and dealerGame.isItHard():
+                dealerGame.bustDealer()
+                break
+        
+        # Determine winner
+        if dealerGame.bust:
+            # Player wins
+            balance += current_bet * 2
+            showMessage(f"Dealer busts! You win ${current_bet}")
+        else:
+            player_total = playerGame.total if playerGame.hardHand else max(playerGame.total, playerGame.total + 10)
+            dealer_total = dealerGame.total if dealerGame.hardHand else max(dealerGame.total, dealerGame.total + 10)
+            
+            if player_total > 21:
+                player_total = playerGame.total  # Use soft total if over 21
+            
+            if player_total > dealer_total:
+                balance += current_bet * 2
+                showMessage(f"You win ${current_bet}!")
+            elif player_total == dealer_total:
+                balance += current_bet  # Push
+                showMessage("Push! Bet returned")
+            else:
+                showMessage("You lose!")
+    
+    # Reset current bet
+    current_bet = 0
+    
+    # End the game
+    game_in_progress = False
+    bet_placed = False
+
+def showMessage(msg):
+    # Create a semi-transparent overlay
+    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 180))  # Semi-transparent black
+    screen.blit(overlay, (0, 0))
+    
+    # Draw message box
+    msg_box = pygame.Rect(width//2 - 200, height//2 - 75, 400, 150)
+    pygame.draw.rect(screen, (30, 50, 80), msg_box, border_radius=15)
+    pygame.draw.rect(screen, (50, 80, 120), msg_box.inflate(-10, -10), border_radius=10)
+    
+    # Draw message text
+    msg_text = buttonFont.render(msg, True, (255, 255, 255))
+    screen.blit(msg_text, (width//2 - msg_text.get_width()//2, height//2 - 30))
+    
+    # Draw continue button
+    continue_btn = pygame.Rect(width//2 - 50, height//2 + 30, 100, 40)
+    pygame.draw.rect(screen, (0, 150, 0), continue_btn, border_radius=10)
+    continue_text = buttonFont.render("OK", True, (255, 255, 255))
+    screen.blit(continue_text, (continue_btn.centerx - continue_text.get_width()//2, 
+                               continue_btn.centery - continue_text.get_height()//2))
+    
+    pygame.display.flip()
+    
+    # Wait for user to click OK
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if continue_btn.collidepoint(event.pos):
+                    waiting = False
+        pygame.time.delay(100)
+
+def setError(message):
+    global error_message, error_timer
+    error_message = message
+    error_timer = pygame.time.get_ticks()
+
+def updateDealerReveal():
+    global dealer_reveal_index, dealer_reveal_timer, dealer_revealing
+    
+    if dealer_revealing:
+        current_time = pygame.time.get_ticks()
+        if current_time - dealer_reveal_timer > 500:  # 0.5 seconds between reveals
+            dealer_reveal_index += 1
+            dealer_reveal_timer = current_time
+            
+            # If all cards revealed, stop revealing
+            if dealer_reveal_index >= len(dealerGame.cardList):
+                dealer_revealing = False
+
+# Initialize game objects
+dealerGame = dealer()
+playerGame = player()
+game_in_progress = False
+bet_placed = False
+input_active = False
+bet_input = ""
+error_message = ""
+error_timer = 0
+dealer_revealing = False
+dealer_reveal_index = 0
+dealer_reveal_timer = 0
 
 def main():
-    global WIDTH, HEIGHT
+    global WIDTH, HEIGHT, balance, current_bet, game_in_progress, bet_placed
+    global input_active, bet_input, error_message, error_timer
     
-
     clock = pygame.time.Clock()
     running = True
     
@@ -522,48 +703,80 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_g:
-                    dealerGame.addCard()
-                elif event.key == pygame.K_q:
+                if event.key == pygame.K_q:
                     running = False
-                elif event.key == pygame.K_t:
-                    playerGame.addCard()
-                elif event.key == pygame.K_b:
-                    playerGame.bustPlayer()
-                    dealerGame.bustDealer()
-                elif event.key == pygame.K_n:
-                    playerGame.newHand()
-                    dealerGame.newHand()
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if hitButton.collidepoint(event.pos) and playerGame.isItPlayerTurn() and not playerGame.isPlayerBust():
-                    playerGame.addCard()
-                elif standButton. collidepoint(event.pos):
-                    playerGame.endTurn()
+                elif input_active:
+                    if event.key == pygame.K_RETURN:
+                        try:
+                            bet_amount = int(bet_input)
+                            if bet_amount <= 0:
+                                setError("Bet must be positive")
+                            elif bet_amount > balance:
+                                setError("Not enough balance")
+                            else:
+                                current_bet = bet_amount
+                                balance -= bet_amount
+                                newGame()
+                                bet_input = ""
+                        except ValueError:
+                            setError("Invalid bet amount")
+                    elif event.key == pygame.K_BACKSPACE:
+                        bet_input = bet_input[:-1]
+                    elif event.unicode.isdigit():
+                        bet_input += event.unicode
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                # Bet input box
+                if bet_input_box.collidepoint(event.pos):
+                    input_active = True
+                else:
+                    input_active = False
+                
+                # Bet button
+                if bet_button.collidepoint(event.pos) and not game_in_progress:
+                    try:
+                        bet_amount = int(bet_input) if bet_input else 0
+                        if bet_amount <= 0:
+                            setError("Bet must be positive")
+                        elif bet_amount > balance:
+                            setError("Not enough balance")
+                        else:
+                            current_bet = bet_amount
+                            balance -= bet_amount
+                            newGame()
+                            bet_input = ""
+                    except ValueError:
+                        setError("Invalid bet amount")
+                
+                # Game buttons
+                if game_in_progress and bet_placed:
+                    if 'hitButton' in globals() and hitButton.collidepoint(event.pos) and playerGame.isItPlayerTurn() and not playerGame.isPlayerBust():
+                        playerGame.addCard()
+                        if playerGame.isPlayerBust():
+                            showMessage("Bust! You lose")
+                            endRound()
+                    elif 'standButton' in globals() and standButton.collidepoint(event.pos) and playerGame.isItPlayerTurn() and not playerGame.isPlayerBust():
+                        playerGame.endTurn()
+                        endRound()
 
-
-
+        # Update dealer card reveal animation
+        updateDealerReveal()
 
         screen.fill(background_color)
         drawBanner()
+        drawBalance()
+        drawBetInput()
 
-        if playerGame.isItPlayerTurn() and not playerGame.isPlayerBust():
+        if game_in_progress and bet_placed:
             hitButtonDraw()
             standButtonDraw()
-        
-        if not playerGame.isItPlayerTurn():
-            dealerGame.flipCard()
-            if dealerGame.getTotal() <= 16:
-                dealerGame.addCard()
-            if dealerGame.getTotal() > 21 and dealerGame.isItHard():
-                dealerGame.bustDealer()
-            if dealerGame.getTotal() < 16 and dealerGame.isItHard():
-                dealerGame.endTurn()
-
-
-        # if(playerGame.isPlayerBust() or not playerGame.isItPlayerTurn()):
-            # newGame()
-        
-
+            
+            if not playerGame.isItPlayerTurn() and not dealer_revealing:
+                if dealerGame.getTotal() <= 16:
+                    dealerGame.addCard()
+                if dealerGame.getTotal() > 21 and dealerGame.isItHard():
+                    dealerGame.bustDealer()
+                if dealerGame.getTotal() < 16 and dealerGame.isItHard():
+                    dealerGame.endTurn()
 
         dealerGame.displayCard()
         playerGame.displayCard()
