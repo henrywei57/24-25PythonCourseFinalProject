@@ -3,6 +3,7 @@ import random
 import pygame.gfxdraw
 import time
 import threading
+import cv2  # For video playback
 
 true = True
 false = False
@@ -38,6 +39,7 @@ error_timer = 0
 dealer_revealing = False
 dealer_reveal_index = 0
 dealer_reveal_timer = 0
+pending_message = ""
 
 def cardToNum(card):
     if card.getRank() == "A":
@@ -474,19 +476,19 @@ def drawBanner():
 
 def drawBalance():
     # Draw balance background
-    pygame.draw.rect(screen, (30, 50, 70), (width//4 - 300, 20, 200, 60), border_radius=10)
-    pygame.draw.rect(screen, (20, 40, 60), (width//4 - 295, 25, 190, 50), border_radius=8)
+    pygame.draw.rect(screen, (30, 50, 70), (width//5 - 300, 20, 200, 60), border_radius=10)
+    pygame.draw.rect(screen, (20, 40, 60), (width//5 - 295, 25, 190, 50), border_radius=8)
     
     # Draw balance text
     balance_text = balanceFont.render(f"${balance}", True, (255, 255, 255))
-    screen.blit(balance_text, (width//4 - 280, 35))
+    screen.blit(balance_text, (width//5 - 280, 35))
     
     # Draw current bet
     if current_bet > 0:
-        pygame.draw.rect(screen, (70, 30, 50), (width//4 + 100, 20, 200, 60), border_radius=10)
-        pygame.draw.rect(screen, (60, 20, 40), (width//4 + 105, 25, 190, 50), border_radius=8)
+        pygame.draw.rect(screen, (70, 30, 50), (width//5 + 100, 20, 200, 60), border_radius=10)
+        pygame.draw.rect(screen, (60, 20, 40), (width//5 + 105, 25, 190, 50), border_radius=8)
         bet_text = balanceFont.render(f"Bet: ${current_bet}", True, (255, 255, 255))
-        screen.blit(bet_text, (width//4 + 120, 35))
+        screen.blit(bet_text, (width//5 + 120, 35))
 
 def drawBetInput():
     global bet_input_box, bet_button
@@ -518,34 +520,38 @@ def drawBetInput():
 
 def hitButtonDraw():
     global hitButton
-    hitButton = pygame.Rect(width//2 - 150, height - 175, 100, 50)
-    if (bet_placed and game_in_progress and playerGame.isItPlayerTurn() and 
-        not playerGame.isPlayerBust() and not playerGame.blackjack):
+    hitButton = pygame.Rect(width//2 - 200 + width//4, height - 175, 200, 100)
+    if (bet_placed and game_in_progress and playerGame.isItPlayerTurn() 
+        and not playerGame.isPlayerBust() and not playerGame.blackjack and not dealer_revealing):
         mousepos = pygame.mouse.get_pos()
         if hitButton.collidepoint(mousepos):
             color = (0, 100, 255-28) 
         else:
             color = (0, 128, 255)
-        pygame.draw.rect(screen, color, hitButton, border_radius=15)
-        text = buttonFont.render("Hit", True, (255, 255, 255))
-        screen.blit(text, text.get_rect(center=hitButton.center)) 
+    else:
+        color = (100, 100, 100)  # Grayed out when not active
+    pygame.draw.rect(screen, color, hitButton, border_radius=15)
+    text = buttonFont.render("Hit", True, (255, 255, 255))
+    screen.blit(text, text.get_rect(center=hitButton.center)) 
 
 def standButtonDraw():
     global standButton
-    standButton = pygame.Rect(width//2 + 50, height - 175, 100, 50)
-    if (bet_placed and game_in_progress and playerGame.isItPlayerTurn() and 
-        not playerGame.isPlayerBust() and not playerGame.blackjack):
+    standButton = pygame.Rect(width//2 + 150 + width//4, height - 175, 200, 100)
+    if (bet_placed and game_in_progress and playerGame.isItPlayerTurn() 
+        and not playerGame.isPlayerBust() and not playerGame.blackjack and not dealer_revealing):
         mousepos = pygame.mouse.get_pos()
         if standButton.collidepoint(mousepos):
             color = (0, 100, 255-28) 
         else:
             color = (0, 128, 255)
-        pygame.draw.rect(screen, color, standButton, border_radius=15)
-        text = buttonFont.render("Stand", True, (255, 255, 255))
-        screen.blit(text, text.get_rect(center=standButton.center))    
+    else:
+        color = (100, 100, 100)  # Grayed out when not active
+    pygame.draw.rect(screen, color, standButton, border_radius=15)
+    text = buttonFont.render("Stand", True, (255, 255, 255))
+    screen.blit(text, text.get_rect(center=standButton.center))
 
 def newGame():
-    global game_in_progress, bet_placed, dealer_revealing, dealer_reveal_index
+    global game_in_progress, bet_placed, dealer_revealing, dealer_reveal_index, allDone
     reset_used_cards()
     playerGame.newHand()
     dealerGame.newHand()
@@ -553,6 +559,7 @@ def newGame():
     bet_placed = True
     dealer_revealing = False
     dealer_reveal_index = 0
+    allDone = False  # Reset allDone for new round
     
     # Check for immediate blackjack
     checkBlackjack()
@@ -578,14 +585,17 @@ def checkBlackjack():
         endRound()
 
 def endRound():
-    global game_in_progress, bet_placed, current_bet, dealer_revealing, balance
+    global game_in_progress, bet_placed, current_bet, dealer_revealing, balance, input_active, allDone, pending_message
     
     # Flip dealer's card
     dealerGame.flipCard()
     dealer_revealing = True
     
+    # If player busts, just show bust message after reveal
+    if playerGame.bust:
+        pending_message = "Bust! You lose"
     # If player didn't bust and doesn't have blackjack, compare totals
-    if not playerGame.bust and not playerGame.blackjack:
+    elif not playerGame.blackjack:
         # Dealer must hit until 17
         while dealerGame.getTotal() < 17 or (not dealerGame.isItHard() and dealerGame.getTotal() == 17):
             dealerGame.addCard()
@@ -597,7 +607,7 @@ def endRound():
         if dealerGame.bust:
             # Player wins
             balance += current_bet * 2
-            showMessage(f"Dealer busts! You win ${current_bet}")
+            pending_message = f"Dealer busts! You win ${current_bet}"
         else:
             player_total = playerGame.total if playerGame.hardHand else max(playerGame.total, playerGame.total + 10)
             dealer_total = dealerGame.total if dealerGame.hardHand else max(dealerGame.total, dealerGame.total + 10)
@@ -607,12 +617,12 @@ def endRound():
             
             if player_total > dealer_total:
                 balance += current_bet * 2
-                showMessage(f"You win ${current_bet}!")
+                pending_message = f"You win ${current_bet}!"
             elif player_total == dealer_total:
                 balance += current_bet  # Push
-                showMessage("Push! Bet returned")
+                pending_message = "Push! Bet returned"
             else:
-                showMessage("You lose!")
+                pending_message = "You lose!"
     
     # Reset current bet
     current_bet = 0
@@ -620,6 +630,8 @@ def endRound():
     # End the game
     game_in_progress = False
     bet_placed = False
+    input_active = True  # Allow new bet
+    allDone = False      # Reset for next round
 
 def showMessage(msg):
     # Create a semi-transparent overlay
@@ -663,7 +675,7 @@ def setError(message):
     error_timer = pygame.time.get_ticks()
 
 def updateDealerReveal():
-    global dealer_reveal_index, dealer_reveal_timer, dealer_revealing
+    global dealer_reveal_index, dealer_reveal_timer, dealer_revealing, allDone
     
     if dealer_revealing:
         current_time = pygame.time.get_ticks()
@@ -672,8 +684,40 @@ def updateDealerReveal():
             dealer_reveal_timer = current_time
             
             # If all cards revealed, stop revealing
-            if dealer_reveal_index >= len(dealerGame.cardList):
+            if dealer_reveal_index > len(dealerGame.cardList):
                 dealer_revealing = False
+                allDone = True
+
+def play_video(video_path):
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"Error: Cannot open video {video_path}")
+        return
+    cv2.namedWindow('Video', cv2.WINDOW_NORMAL)
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        cv2.imshow('Video', frame)
+        if cv2.waitKey(30) & 0xFF == ord('q'):
+            break
+    cap.release()
+    cv2.destroyAllWindows()
+
+def drawVideoButton():
+    global video_button_rect
+    btn_size = 60
+    margin = 20
+    video_button_rect = pygame.Rect(width - btn_size - margin, margin, btn_size, btn_size)
+    color = (80, 80, 200)
+    pygame.draw.rect(screen, color, video_button_rect, border_radius=15)
+    # Draw play icon (triangle)
+    points = [
+        (width - btn_size - margin + 18, margin + 15),
+        (width - btn_size - margin + 18, margin + btn_size - 15),
+        (width - margin - 15, margin + btn_size // 2)
+    ]
+    pygame.draw.polygon(screen, (255, 255, 255), points)
 
 # Initialize game objects
 dealerGame = dealer()
@@ -685,12 +729,13 @@ bet_input = ""
 error_message = ""
 error_timer = 0
 dealer_revealing = False
+allDone = False
 dealer_reveal_index = 0
 dealer_reveal_timer = 0
 
 def main():
     global WIDTH, HEIGHT, balance, current_bet, game_in_progress, bet_placed
-    global input_active, bet_input, error_message, error_timer
+    global input_active, bet_input, error_message, error_timer, pending_message
     
     clock = pygame.time.Clock()
     running = True
@@ -725,8 +770,12 @@ def main():
                     elif event.unicode.isdigit():
                         bet_input += event.unicode
             elif event.type == pygame.MOUSEBUTTONDOWN:
+                # Video button
+                if 'video_button_rect' in globals() and video_button_rect.collidepoint(event.pos):
+                    # Play video in a blocking way (pause game until done)
+                    play_video('video.mp4')  # <-- Replace with your video file path
                 # Bet input box
-                if bet_input_box.collidepoint(event.pos):
+                elif bet_input_box.collidepoint(event.pos):
                     input_active = True
                 else:
                     input_active = False
@@ -752,7 +801,6 @@ def main():
                     if 'hitButton' in globals() and hitButton.collidepoint(event.pos) and playerGame.isItPlayerTurn() and not playerGame.isPlayerBust():
                         playerGame.addCard()
                         if playerGame.isPlayerBust():
-                            showMessage("Bust! You lose")
                             endRound()
                     elif 'standButton' in globals() and standButton.collidepoint(event.pos) and playerGame.isItPlayerTurn() and not playerGame.isPlayerBust():
                         playerGame.endTurn()
@@ -761,10 +809,16 @@ def main():
         # Update dealer card reveal animation
         updateDealerReveal()
 
+        # Show pending message after dealer cards are revealed
+        if not dealer_revealing and pending_message:
+            showMessage(pending_message)
+            pending_message = ""
+
         screen.fill(background_color)
         drawBanner()
         drawBalance()
         drawBetInput()
+        drawVideoButton()  # Draw the video button
 
         if game_in_progress and bet_placed:
             hitButtonDraw()
