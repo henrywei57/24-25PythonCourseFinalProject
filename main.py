@@ -1,8 +1,6 @@
 import pygame 
 import random
 import pygame.gfxdraw
-import time
-import threading
 import cv2  # For video playback
 from money_manager import save_money, load_money
 import math
