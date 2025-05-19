@@ -4,6 +4,8 @@ import pygame.gfxdraw
 import time
 import threading
 import cv2  # For video playback
+from money_manager import save_money, load_money
+import math
 
 true = True
 false = False
@@ -28,7 +30,7 @@ bannerColor = (22, 44, 57)
 bannerFont = pygame.font.SysFont(None, 40)
 
 # Initialize balance and betting variables
-balance = 1000  # Starting balance
+balance = load_money()  # Load balance from file
 current_bet = 0
 game_in_progress = False
 bet_placed = False
@@ -489,6 +491,7 @@ def drawBalance():
         pygame.draw.rect(screen, (60, 20, 40), (width//5 + 105, 25, 190, 50), border_radius=8)
         bet_text = balanceFont.render(f"Bet: ${current_bet}", True, (255, 255, 255))
         screen.blit(bet_text, (width//5 + 120, 35))
+    save_money(balance)  # Save balance after updating display
 
 def drawBetInput():
     global bet_input_box, bet_button
@@ -688,22 +691,6 @@ def updateDealerReveal():
                 dealer_revealing = False
                 allDone = True
 
-def play_video(video_path):
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print(f"Error: Cannot open video {video_path}")
-        return
-    cv2.namedWindow('Video', cv2.WINDOW_NORMAL)
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        cv2.imshow('Video', frame)
-        if cv2.waitKey(30) & 0xFF == ord('q'):
-            break
-    cap.release()
-    cv2.destroyAllWindows()
-
 def drawVideoButton():
     global video_button_rect
     btn_size = 60
@@ -718,6 +705,126 @@ def drawVideoButton():
         (width - margin - 15, margin + btn_size // 2)
     ]
     pygame.draw.polygon(screen, (255, 255, 255), points)
+    
+    # Draw reward text
+    reward_text = buttonFont.render("+$150", True, (255, 255, 255))
+    screen.blit(reward_text, (width - btn_size - margin - reward_text.get_width() - 10, margin + btn_size//2 - reward_text.get_height()//2))
+
+def play_video(video_path):
+    global balance
+    # Add reward before playing video
+    balance += 150
+    save_money(balance)  # Save the new balance
+    
+    # Create a fullscreen window
+    cv2.namedWindow('Video', cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty('Video', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"Error: Cannot open video {video_path}")
+        return
+    
+    # Get video properties
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_delay = int(1000/fps)  # Delay between frames in milliseconds
+    
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+            
+        # Display the frame
+        cv2.imshow('Video', frame)
+        
+        # Wait for the frame duration
+        cv2.waitKey(frame_delay)
+    
+    cap.release()
+    cv2.destroyAllWindows()
+
+def drawQuitButton():
+    global quit_button_rect, quit_button_velocity, quit_button_size
+    
+    # Initialize velocity and size if not exists
+    if 'quit_button_velocity' not in globals():
+        quit_button_velocity = [0, 0]
+    if 'quit_button_size' not in globals():
+        quit_button_size = 80  # Start with medium size
+    
+    # Get mouse position
+    mouse_pos = pygame.mouse.get_pos()
+    
+    # Button size and initial position
+    btn_width = quit_button_size
+    btn_height = quit_button_size // 2
+    
+    # If button doesn't exist, create it
+    if 'quit_button_rect' not in globals():
+        quit_button_rect = pygame.Rect(20, 20, btn_width, btn_height)
+    
+    # Calculate distance from mouse to button center
+    button_center = (quit_button_rect.centerx, quit_button_rect.centery)
+    distance = math.sqrt((mouse_pos[0] - button_center[0])**2 + (mouse_pos[1] - button_center[1])**2)
+    
+    # If mouse is close to button, move it away and shrink
+    if distance < 150:  # Increased detection radius
+        # Calculate direction away from mouse
+        dx = button_center[0] - mouse_pos[0]
+        dy = button_center[1] - mouse_pos[1]
+        # Normalize and scale with increased speed
+        length = math.sqrt(dx*dx + dy*dy)
+        if length > 0:
+            dx = dx/length * 8  # Increased speed
+            dy = dy/length * 8
+        # Update velocity
+        quit_button_velocity[0] = dx
+        quit_button_velocity[1] = dy
+        
+        # Shrink button when mouse is close
+        quit_button_size = max(40, quit_button_size - 0.5)  # Minimum size of 40
+    else:
+        # Gradually grow back when mouse is far
+        quit_button_size = min(80, quit_button_size + 0.2)  # Maximum size of 80
+    
+    # Apply velocity with less damping for more erratic movement
+    quit_button_rect.x += quit_button_velocity[0]
+    quit_button_rect.y += quit_button_velocity[1]
+    quit_button_velocity[0] *= 0.98  # Less damping
+    quit_button_velocity[1] *= 0.98
+    
+    # Add some random movement
+    if random.random() < 0.1:  # 10% chance each frame
+        quit_button_velocity[0] += random.uniform(-2, 2)
+        quit_button_velocity[1] += random.uniform(-2, 2)
+    
+    # Keep button within screen bounds with bounce
+    if quit_button_rect.left < 0:
+        quit_button_rect.left = 0
+        quit_button_velocity[0] *= -0.8  # More bounce
+    if quit_button_rect.right > width:
+        quit_button_rect.right = width
+        quit_button_velocity[0] *= -0.8
+    if quit_button_rect.top < 0:
+        quit_button_rect.top = 0
+        quit_button_velocity[1] *= -0.8
+    if quit_button_rect.bottom > height:
+        quit_button_rect.bottom = height
+        quit_button_velocity[1] *= -0.8
+    
+    # Update button size
+    quit_button_rect.width = btn_width
+    quit_button_rect.height = btn_height
+    
+    # Draw button with pulsing effect (fixed color calculation)
+    pulse = (math.sin(pygame.time.get_ticks() * 0.005) + 1) * 15  # Reduced amplitude
+    button_color = (min(255, max(0, 200 + int(pulse))), 50, 50)  # Clamped to valid range
+    pygame.draw.rect(screen, button_color, quit_button_rect, border_radius=10)
+    
+    # Draw "Quit" text with smaller font
+    quit_text = buttonFont.render("Quit", True, (255, 255, 255))
+    text_rect = quit_text.get_rect(center=quit_button_rect.center)
+    screen.blit(quit_text, text_rect)
 
 # Initialize game objects
 dealerGame = dealer()
@@ -772,8 +879,15 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # Video button
                 if 'video_button_rect' in globals() and video_button_rect.collidepoint(event.pos):
-                    # Play video in a blocking way (pause game until done)
-                    play_video('video.mp4')  # <-- Replace with your video file path
+                    # Play random video
+                    video_number = random.randint(1, 5)
+                    video_path = f'video{video_number}.mp4'
+                    play_video(video_path)
+                # Quit button with smaller hitbox
+                elif 'quit_button_rect' in globals():
+                    hitbox = quit_button_rect.inflate(-20, -10)  # Smaller hitbox than visual button
+                    if hitbox.collidepoint(event.pos):
+                        running = False
                 # Bet input box
                 elif bet_input_box.collidepoint(event.pos):
                     input_active = True
@@ -819,6 +933,7 @@ def main():
         drawBalance()
         drawBetInput()
         drawVideoButton()  # Draw the video button
+        drawQuitButton()   # Draw the moving quit button
 
         if game_in_progress and bet_placed:
             hitButtonDraw()
