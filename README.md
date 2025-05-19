@@ -142,28 +142,4 @@ python main.py
 
 3. Video Integration
    - Solution: Used OpenCV for video playback
-   - Learning: External library integration
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👥 Authors
-
-- Your Name - Initial work
-
-## 🙏 Acknowledgments
-
-- Thanks to the Pygame community for their excellent documentation
-- OpenCV for video playback capabilities
-- All contributors and testers
-
-## 📞 Contact
-
-Your Name - [@yourtwitter](https://twitter.com/yourtwitter)
-
-Project Link: [https://github.com/yourusername/blackjack-game](https://github.com/yourusername/blackjack-game) 
+   - Learning: External library integration 
