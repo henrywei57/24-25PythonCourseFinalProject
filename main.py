@@ -767,61 +767,61 @@ def drawQuitButton():
     button_center = (quit_button_rect.centerx, quit_button_rect.centery)
     distance = math.sqrt((mouse_pos[0] - button_center[0])**2 + (mouse_pos[1] - button_center[1])**2)
     
-    # If mouse is close to button, move it away and shrink
-    if distance < 150:  # Increased detection radius
+    # If mouse is close to button, move it away faster
+    if distance < 100:  # Same detection radius
         # Calculate direction away from mouse
         dx = button_center[0] - mouse_pos[0]
         dy = button_center[1] - mouse_pos[1]
         # Normalize and scale with increased speed
         length = math.sqrt(dx*dx + dy*dy)
         if length > 0:
-            dx = dx/length * 8  # Increased speed
-            dy = dy/length * 8
+            dx = dx/length * 12  # Increased speed from 4 to 12
+            dy = dy/length * 12
         # Update velocity
         quit_button_velocity[0] = dx
         quit_button_velocity[1] = dy
         
-        # Shrink button when mouse is close
-        quit_button_size = max(40, quit_button_size - 0.5)  # Minimum size of 40
+        # Shrink button when mouse is close, but not as much
+        quit_button_size = max(50, quit_button_size - 0.3)  # Same minimum size
     else:
         # Gradually grow back when mouse is far
-        quit_button_size = min(80, quit_button_size + 0.2)  # Maximum size of 80
+        quit_button_size = min(80, quit_button_size + 0.2)  # Same maximum size
     
-    # Apply velocity with less damping for more erratic movement
+    # Apply velocity with less damping for faster movement
     quit_button_rect.x += quit_button_velocity[0]
     quit_button_rect.y += quit_button_velocity[1]
-    quit_button_velocity[0] *= 0.98  # Less damping
+    quit_button_velocity[0] *= 0.98  # Less damping for faster movement
     quit_button_velocity[1] *= 0.98
     
-    # Add some random movement
-    if random.random() < 0.1:  # 10% chance each frame
-        quit_button_velocity[0] += random.uniform(-2, 2)
+    # Add more random movement for unpredictability
+    if random.random() < 0.08:  # Increased chance from 5% to 8%
+        quit_button_velocity[0] += random.uniform(-2, 2)  # Increased random movement
         quit_button_velocity[1] += random.uniform(-2, 2)
     
     # Keep button within screen bounds with bounce
     if quit_button_rect.left < 0:
         quit_button_rect.left = 0
-        quit_button_velocity[0] *= -0.8  # More bounce
+        quit_button_velocity[0] *= -0.95  # More bounce
     if quit_button_rect.right > width:
         quit_button_rect.right = width
-        quit_button_velocity[0] *= -0.8
+        quit_button_velocity[0] *= -0.95
     if quit_button_rect.top < 0:
         quit_button_rect.top = 0
-        quit_button_velocity[1] *= -0.8
+        quit_button_velocity[1] *= -0.95
     if quit_button_rect.bottom > height:
         quit_button_rect.bottom = height
-        quit_button_velocity[1] *= -0.8
+        quit_button_velocity[1] *= -0.95
     
     # Update button size
     quit_button_rect.width = btn_width
     quit_button_rect.height = btn_height
     
-    # Draw button with pulsing effect (fixed color calculation)
-    pulse = (math.sin(pygame.time.get_ticks() * 0.005) + 1) * 15  # Reduced amplitude
-    button_color = (min(255, max(0, 200 + int(pulse))), 50, 50)  # Clamped to valid range
+    # Draw button with pulsing effect
+    pulse = (math.sin(pygame.time.get_ticks() * 0.005) + 1) * 15
+    button_color = (min(255, max(0, 200 + int(pulse))), 50, 50)
     pygame.draw.rect(screen, button_color, quit_button_rect, border_radius=10)
     
-    # Draw "Quit" text with smaller font
+    # Draw "Quit" text
     quit_text = buttonFont.render("Quit", True, (255, 255, 255))
     text_rect = quit_text.get_rect(center=quit_button_rect.center)
     screen.blit(quit_text, text_rect)
@@ -857,25 +857,30 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
                     running = False
-                elif input_active:
-                    if event.key == pygame.K_RETURN:
-                        try:
-                            bet_amount = int(bet_input)
-                            if bet_amount <= 0:
-                                setError("Bet must be positive")
-                            elif bet_amount > balance:
-                                setError("Not enough balance")
-                            else:
-                                current_bet = bet_amount
-                                balance -= bet_amount
-                                newGame()
-                                bet_input = ""
-                        except ValueError:
-                            setError("Invalid bet amount")
-                    elif event.key == pygame.K_BACKSPACE:
-                        bet_input = bet_input[:-1]
-                    elif event.unicode.isdigit():
-                        bet_input += event.unicode
+                elif event.key == pygame.K_RETURN:
+                    try:
+                        bet_amount = int(bet_input)
+                        if bet_amount <= 0:
+                            setError("Bet must be positive")
+                        elif bet_amount > balance:
+                            setError("Not enough balance")
+                        elif game_in_progress:
+                            setError("Finish current game first")
+                        else:
+                            current_bet = bet_amount
+                            balance -= bet_amount
+                            newGame()
+                            bet_input = ""
+                    except ValueError:
+                        setError("Invalid bet amount")
+                elif event.key == pygame.K_BACKSPACE:
+                    bet_input = bet_input[:-1]
+            elif event.type == pygame.TEXTINPUT:
+                # Only allow digits
+                if event.text.isdigit():
+                    # Limit input length to prevent overflow
+                    if len(bet_input) < 10:  # Maximum 10 digits
+                        bet_input += event.text
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # Video button
                 if 'video_button_rect' in globals() and video_button_rect.collidepoint(event.pos):
@@ -883,25 +888,21 @@ def main():
                     video_number = random.randint(1, 5)
                     video_path = f'video{video_number}.mp4'
                     play_video(video_path)
-                # Quit button with smaller hitbox
+                # Quit button with larger hitbox
                 elif 'quit_button_rect' in globals():
-                    hitbox = quit_button_rect.inflate(-20, -10)  # Smaller hitbox than visual button
+                    hitbox = quit_button_rect.inflate(20, 10)  # Larger hitbox
                     if hitbox.collidepoint(event.pos):
                         running = False
-                # Bet input box
-                elif bet_input_box.collidepoint(event.pos):
-                    input_active = True
-                else:
-                    input_active = False
-                
                 # Bet button
-                if bet_button.collidepoint(event.pos) and not game_in_progress:
+                if bet_button.collidepoint(event.pos):
                     try:
                         bet_amount = int(bet_input) if bet_input else 0
                         if bet_amount <= 0:
                             setError("Bet must be positive")
                         elif bet_amount > balance:
                             setError("Not enough balance")
+                        elif game_in_progress:
+                            setError("Finish current game first")
                         else:
                             current_bet = bet_amount
                             balance -= bet_amount
@@ -939,12 +940,17 @@ def main():
             hitButtonDraw()
             standButtonDraw()
             
+            # Dealer's turn logic
             if not playerGame.isItPlayerTurn() and not dealer_revealing:
-                if dealerGame.getTotal() <= 16:
+                dealer_total = dealerGame.getTotal()
+                dealer_soft = not dealerGame.isItHard()
+                
+                # Dealer must hit on soft 17 or below
+                if (dealer_total < 17) or (dealer_total == 17 and not dealer_soft):
                     dealerGame.addCard()
-                if dealerGame.getTotal() > 21 and dealerGame.isItHard():
-                    dealerGame.bustDealer()
-                if dealerGame.getTotal() < 16 and dealerGame.isItHard():
+                    if dealerGame.getTotal() > 21 and dealerGame.isItHard():
+                        dealerGame.bustDealer()
+                else:
                     dealerGame.endTurn()
 
         dealerGame.displayCard()

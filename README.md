@@ -2,8 +2,6 @@
 
 A modern implementation of the classic casino card game Blackjack, developed using Python and Pygame. This project combines traditional Blackjack rules with engaging visual elements and interactive features.
 
-![Blackjack Game](https://via.placeholder.com/800x400?text=Blackjack+Game+Screenshot)
-
 ## 🎯 Features
 
 - Modern UI with animated card reveals and dealer interactions
