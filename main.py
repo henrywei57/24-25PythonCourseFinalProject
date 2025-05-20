@@ -4,6 +4,7 @@ import pygame.gfxdraw
 import cv2  # For video playback
 from money_manager import save_money, load_money
 import math
+import os  # Add this import for file operations
 
 true = True
 false = False
@@ -476,19 +477,19 @@ def drawBanner():
 
 def drawBalance():
     # Draw balance background
-    pygame.draw.rect(screen, (30, 50, 70), (width//5 - 300, 20, 200, 60), border_radius=10)
-    pygame.draw.rect(screen, (20, 40, 60), (width//5 - 295, 25, 190, 50), border_radius=8)
+    pygame.draw.rect(screen, (30, 50, 70), (width//4 - 300, 20, 200, 60), border_radius=10)
+    pygame.draw.rect(screen, (20, 40, 60), (width//4 - 295, 25, 190, 50), border_radius=8)
     
     # Draw balance text
     balance_text = balanceFont.render(f"${balance}", True, (255, 255, 255))
-    screen.blit(balance_text, (width//5 - 280, 35))
+    screen.blit(balance_text, (width//4 - 280, 35))
     
     # Draw current bet
     if current_bet > 0:
-        pygame.draw.rect(screen, (70, 30, 50), (width//5 + 100, 20, 200, 60), border_radius=10)
-        pygame.draw.rect(screen, (60, 20, 40), (width//5 + 105, 25, 190, 50), border_radius=8)
+        pygame.draw.rect(screen, (70, 30, 50), (width//4 + 100, 20, 200, 60), border_radius=10)
+        pygame.draw.rect(screen, (60, 20, 40), (width//4 + 105, 25, 190, 50), border_radius=8)
         bet_text = balanceFont.render(f"Bet: ${current_bet}", True, (255, 255, 255))
-        screen.blit(bet_text, (width//5 + 120, 35))
+        screen.blit(bet_text, (width//4 + 120, 35))
     save_money(balance)  # Save balance after updating display
 
 def drawBetInput():
@@ -635,40 +636,74 @@ def endRound():
     allDone = False      # Reset for next round
 
 def showMessage(msg):
-    # Create a semi-transparent overlay
-    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 180))  # Semi-transparent black
-    screen.blit(overlay, (0, 0))
+    # If it's a loss message and img1 exists, show fullscreen image first
+    if ("lose" in msg.lower() or "bust" in msg.lower()):
+        print("Loss detected, trying to show image...")  # Debug print
+        # Try different possible image extensions
+        image_extensions = ['.jpg', '.jpeg', '.png', '.bmp']
+        image_found = False
+        
+        for ext in image_extensions:
+            image_path = f"img1{ext}"
+            print(f"Checking for image at: {os.path.abspath(image_path)}")  # Print full path
+            if os.path.exists(image_path):
+                print(f"Found image: {image_path}")
+                try:
+                    # Load and scale image to full screen
+                    loss_img = pygame.image.load(image_path)
+                    print("Image loaded successfully")
+                    loss_img = pygame.transform.scale(loss_img, (width, height))
+                    
+                    # Show image for 0.3 seconds
+                    screen.blit(loss_img, (0, 0))
+                    pygame.display.flip()
+                    pygame.time.delay(300)  # 0.3 seconds delay
+                    print("Image displayed for 0.3 seconds")
+                    image_found = True
+                    break
+                except Exception as e:
+                    print(f"Error loading image {image_path}: {e}")
+        
+        if not image_found:
+            print("No image file found with any common extension")
+        return  # Return after showing image
     
-    # Draw message box
-    msg_box = pygame.Rect(width//2 - 200, height//2 - 75, 400, 150)
-    pygame.draw.rect(screen, (30, 50, 80), msg_box, border_radius=15)
-    pygame.draw.rect(screen, (50, 80, 120), msg_box.inflate(-10, -10), border_radius=10)
-    
-    # Draw message text
-    msg_text = buttonFont.render(msg, True, (255, 255, 255))
-    screen.blit(msg_text, (width//2 - msg_text.get_width()//2, height//2 - 30))
-    
-    # Draw continue button
-    continue_btn = pygame.Rect(width//2 - 50, height//2 + 30, 100, 40)
-    pygame.draw.rect(screen, (0, 150, 0), continue_btn, border_radius=10)
-    continue_text = buttonFont.render("OK", True, (255, 255, 255))
-    screen.blit(continue_text, (continue_btn.centerx - continue_text.get_width()//2, 
-                               continue_btn.centery - continue_text.get_height()//2))
-    
-    pygame.display.flip()
-    
-    # Wait for user to click OK
-    waiting = True
-    while waiting:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                return
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if continue_btn.collidepoint(event.pos):
-                    waiting = False
-        pygame.time.delay(100)
+    # For non-loss messages, show the message box
+    if not ("lose" in msg.lower() or "bust" in msg.lower()):
+        # Create a semi-transparent overlay
+        overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))  # Semi-transparent black
+        screen.blit(overlay, (0, 0))
+        
+        # Draw message box
+        msg_box = pygame.Rect(width//2 - 200, height//2 - 75, 400, 150)
+        pygame.draw.rect(screen, (30, 50, 80), msg_box, border_radius=15)
+        pygame.draw.rect(screen, (50, 80, 120), msg_box.inflate(-10, -10), border_radius=10)
+        
+        # Draw message text
+        msg_text = buttonFont.render(msg, True, (255, 255, 255))
+        screen.blit(msg_text, (width//2 - msg_text.get_width()//2, height//2 - 30))
+        
+        # Draw continue button
+        continue_btn = pygame.Rect(width//2 - 50, height//2 + 30, 100, 40)
+        pygame.draw.rect(screen, (0, 150, 0), continue_btn, border_radius=10)
+        continue_text = buttonFont.render("OK", True, (255, 255, 255))
+        screen.blit(continue_text, (continue_btn.centerx - continue_text.get_width()//2, 
+                                   continue_btn.centery - continue_text.get_height()//2))
+        
+        pygame.display.flip()
+        
+        # Wait for user to click OK
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if continue_btn.collidepoint(event.pos):
+                        waiting = False
+            pygame.time.delay(100)
 
 def setError(message):
     global error_message, error_timer
@@ -714,32 +749,42 @@ def play_video(video_path):
     balance += 150
     save_money(balance)  # Save the new balance
     
-    # Create a fullscreen window
-    cv2.namedWindow('Video', cv2.WINDOW_NORMAL)
-    cv2.setWindowProperty('Video', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print(f"Error: Cannot open video {video_path}")
-        return
-    
-    # Get video properties
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_delay = int(1000/fps)  # Delay between frames in milliseconds
-    
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-            
-        # Display the frame
-        cv2.imshow('Video', frame)
+    try:
+        # Create a fullscreen window
+        cv2.namedWindow('Video', cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty('Video', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         
-        # Wait for the frame duration
-        cv2.waitKey(frame_delay)
-    
-    cap.release()
-    cv2.destroyAllWindows()
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"Error: Cannot open video {video_path}")
+            return
+        
+        # Get video properties
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_delay = int(1000/fps)  # Delay between frames in milliseconds
+        
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            # Convert frame from BGR to RGB
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Display the frame
+            cv2.imshow('Video', frame)
+            
+            # Wait for the frame duration
+            key = cv2.waitKey(frame_delay)
+            if key == 27:  # ESC key to exit
+                break
+        
+        cap.release()
+        cv2.destroyAllWindows()
+        
+    except Exception as e:
+        print(f"Error playing video: {e}")
+        cv2.destroyAllWindows()
 
 def drawQuitButton():
     global quit_button_rect, quit_button_velocity, quit_button_size
@@ -883,7 +928,7 @@ def main():
                 # Video button
                 if 'video_button_rect' in globals() and video_button_rect.collidepoint(event.pos):
                     # Play random video
-                    video_number = random.randint(1, 5)
+                    video_number = random.randint(1, 5)  # Back to 5 videos
                     video_path = f'video{video_number}.mp4'
                     play_video(video_path)
                 # Quit button with larger hitbox
